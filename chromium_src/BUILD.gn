@@ -645,8 +645,8 @@ source_set("menu_bar") {
       "//components/sync",
       "//ipc:mojom",
       "//third_party/protobuf:protobuf_lite",
-      "//build/linux/libgio",
     ]
+    configs += [ "//build/linux:gio_config" ]
   }
 }
 
