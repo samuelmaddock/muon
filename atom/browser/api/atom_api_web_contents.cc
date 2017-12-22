@@ -1366,20 +1366,6 @@ void WebContents::DidFailLoad(content::RenderFrameHost* render_frame_host,
       is_main_frame);
 }
 
-void WebContents::DidGetResourceResponseStart(
-    const content::ResourceRequestDetails& details) {
-  const net::HttpResponseHeaders* headers = details.headers.get();
-  Emit("did-get-response-details",
-       details.socket_address.IsEmpty(),
-       details.url,
-       details.original_url,
-       details.http_response_code,
-       details.method,
-       details.referrer,
-       headers,
-       ResourceTypeToString(details.resource_type));
-}
-
 void WebContents::DidStartLoading() {
   Emit("did-start-loading");
 }
