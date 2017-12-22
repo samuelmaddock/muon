@@ -87,7 +87,6 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_view.h"
-#include "content/public/browser/resource_request_details.h"
 #include "content/public/browser/security_style_explanations.h"
 #include "content/public/browser/service_worker_context.h"
 #include "content/public/browser/site_instance.h"
