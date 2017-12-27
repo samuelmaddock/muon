@@ -56,7 +56,6 @@
 #include "chrome/browser/chrome_device_client.h"
 #include "chrome/browser/devtools/remote_debugging_server.h"
 #include "chrome/browser/gpu/gpu_mode_manager.h"
-#include "chrome/browser/gpu/gpu_profile_cache.h"
 #include "chrome/browser/icon_manager.h"
 #include "chrome/browser/intranet_redirect_detector.h"
 #include "chrome/browser/io_thread.h"
@@ -83,7 +82,6 @@
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "atom/browser/extensions/atom_extensions_browser_client.h"
 #include "chrome/browser/extensions/event_router_forwarder.h"
-#include "chrome/common/extensions/extension_process_policy.h"
 #include "chrome/common/extensions/chrome_extensions_client.h"
 #include "components/storage_monitor/storage_monitor.h"
 #include "extensions/common/constants.h"
@@ -578,11 +576,6 @@ IconManager* BrowserProcessImpl::icon_manager() {
 }
 
 GpuModeManager* BrowserProcessImpl::gpu_mode_manager() {
-  NOTIMPLEMENTED();
-  return nullptr;
-}
-
-GpuProfileCache* BrowserProcessImpl::gpu_profile_cache() {
   NOTIMPLEMENTED();
   return nullptr;
 }
