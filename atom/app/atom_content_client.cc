@@ -122,24 +122,19 @@ void AtomContentClient::SetActiveURL(const GURL& url, std::string top_origin) {
 }
 
 void AtomContentClient::SetGpuInfo(const gpu::GPUInfo& gpu_info) {
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPUVendorID,
+  gpu::crash_keys::gpu_vendor_id.Set(
       base::StringPrintf("0x%04x", gpu_info.gpu.vendor_id));
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPUDeviceID,
+  gpu::crash_keys::gpu_device_id.Set(
       base::StringPrintf("0x%04x", gpu_info.gpu.device_id));
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPUDriverVersion,
-      gpu_info.driver_version);
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPUPixelShaderVersion,
-      gpu_info.pixel_shader_version);
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPUVertexShaderVersion,
+  gpu::crash_keys::gpu_driver_version.Set(gpu_info.driver_version);
+  gpu::crash_keys::gpu_pixel_shader_version.Set(gpu_info.pixel_shader_version);
+  gpu::crash_keys::gpu_vertex_shader_version.Set(
       gpu_info.vertex_shader_version);
 #if defined(OS_MACOSX)
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPUGLVersion,
-      gpu_info.gl_version);
+  gpu::crash_keys::gpu_gl_version.Set(gpu_info.gl_version);
 #elif defined(OS_POSIX)
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPUVendor,
-      gpu_info.gl_vendor);
-  base::debug::SetCrashKeyValue(gpu::crash_keys::kGPURenderer,
-      gpu_info.gl_renderer);
+  gpu::crash_keys::gpu_vendor.Set(gpu_info.gl_vendor);
+  gpu::crash_keys::gpu_renderer.Set(gpu_info.gl_renderer);
 #endif
 }
 
