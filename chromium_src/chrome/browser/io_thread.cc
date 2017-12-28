@@ -22,7 +22,6 @@
 #include "components/net_log/chrome_net_log.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "components/proxy_config/pref_proxy_config_tracker.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/network/ignore_errors_cert_verifier.h"
@@ -100,11 +99,6 @@ IOThread::IOThread(
 #if defined(OS_POSIX)
   gssapi_library_name_ = local_state->GetString(prefs::kGSSAPILibraryName);
 #endif
-  pref_proxy_config_tracker_.reset(
-      ProxyServiceFactory::CreatePrefProxyConfigTrackerOfLocalState(
-          local_state));
-  system_proxy_config_service_ = ProxyServiceFactory::CreateProxyConfigService(
-      pref_proxy_config_tracker_.get());
   ssl_config_service_manager_.reset(
       ssl_config::SSLConfigServiceManager::CreateDefaultManager(
           local_state,
@@ -141,7 +135,6 @@ IOThread::IOThread(
 IOThread::~IOThread() {
   BrowserThread::SetIOThreadDelegate(nullptr);
 
-  pref_proxy_config_tracker_->DetachFromPrefService();
   DCHECK(!globals_);
 
   // Destroy the old distributor to check that the observers list it holds is
@@ -277,7 +270,6 @@ void IOThread::CleanUp() {
   // Shutdown the HistogramWatcher on the IO thread.
   net::NetworkChangeNotifier::ShutdownHistogramWatcher();
 
-  system_proxy_config_service_.reset();
   delete globals_;
   globals_ = NULL;
 
@@ -435,9 +427,8 @@ IOThread::CreateDefaultAuthHandlerFactory(net::HostResolver* host_resolver) {
       globals_->http_auth_preferences.get(), host_resolver);
 }
 
-void IOThread::SetUpProxyConfigService(
-    content::URLRequestContextBuilderMojo* builder,
-    std::unique_ptr<net::ProxyConfigService> proxy_config_service) const {
+void IOThread::SetUpProxyService(
+    content::URLRequestContextBuilderMojo* builder) const {
   const base::CommandLine& command_line =
       *base::CommandLine::ForCurrentProcess();
 
@@ -458,7 +449,6 @@ void IOThread::SetUpProxyConfigService(
       PacHttpsUrlStrippingEnabled()
           ? net::ProxyService::SanitizeUrlPolicy::SAFE
           : net::ProxyService::SanitizeUrlPolicy::UNSAFE);
-  builder->set_proxy_config_service(std::move(proxy_config_service));
 }
 
 void IOThread::ConstructSystemRequestContext() {
@@ -498,8 +488,7 @@ void IOThread::ConstructSystemRequestContext() {
 
   builder->set_ct_verifier(std::move(ct_verifier));
 
-  SetUpProxyConfigService(builder.get(),
-                          std::move(system_proxy_config_service_));
+  SetUpProxyService(builder.get());
 
   globals_->network_service = content::NetworkService::Create(
       std::move(network_service_request_), net_log_);
