@@ -123,7 +123,7 @@ IOThread::IOThread(
   pac_https_url_stripping_enabled_.MoveToThread(io_thread_proxy);
 
   chrome_browser_net::SetGlobalSTHDistributor(
-      std::unique_ptr<net::ct::STHDistributor>(new net::ct::STHDistributor()));
+      std::make_unique<net::ct::STHDistributor>());
 
   BrowserThread::SetIOThreadDelegate(this);
 
@@ -223,16 +223,6 @@ void IOThread::Init() {
       extension_event_router_forwarder_;
 #endif
 
-  std::vector<scoped_refptr<const net::CTLogVerifier>> ct_logs(
-      net::ct::CreateLogVerifiersForKnownLogs());
-
-  globals_->ct_logs.assign(ct_logs.begin(), ct_logs.end());
-
-  ct_tree_tracker_.reset(new certificate_transparency::TreeStateTracker(
-      globals_->ct_logs, net_log_));
-  // Register the ct_tree_tracker_ as observer for new STHs.
-  RegisterSTHObserver(ct_tree_tracker_.get());
-
 #if defined(OS_MACOSX)
   // Start observing Keychain events. This needs to be done on the UI thread,
   // as Keychain services requires a CFRunLoop.
@@ -244,6 +234,21 @@ void IOThread::Init() {
   ConstructSystemRequestContext();
 
   UpdateDnsClientEnabled();
+
+  std::vector<scoped_refptr<const net::CTLogVerifier>> ct_logs(
+      net::ct::CreateLogVerifiersForKnownLogs());
+
+  globals_->ct_logs.assign(ct_logs.begin(), ct_logs.end());
+
+  ct_tree_tracker_ =
+      std::make_unique<certificate_transparency::TreeStateTracker>(
+          globals_->ct_logs, globals_->system_request_context->host_resolver(),
+          net_log_);
+  // Register the ct_tree_tracker_ as observer for new STHs.
+  RegisterSTHObserver(ct_tree_tracker_.get());
+  // Register the ct_tree_tracker_ as observer for verified SCTs.
+  globals_->system_request_context->cert_transparency_verifier()->SetObserver(
+      ct_tree_tracker_.get());
 }
 
 void IOThread::CleanUp() {
@@ -251,7 +256,7 @@ void IOThread::CleanUp() {
   net::ShutdownNSSHttpIO();
 #endif
 
-  system_url_request_context_getter_ = NULL;
+  system_url_request_context_getter_ = nullptr;
 
   // Unlink the ct_tree_tracker_ from the global cert_transparency_verifier
   // and unregister it from new STH notifications so it will take no actions
@@ -271,7 +276,7 @@ void IOThread::CleanUp() {
   net::NetworkChangeNotifier::ShutdownHistogramWatcher();
 
   delete globals_;
-  globals_ = NULL;
+  globals_ = nullptr;
 
   base::debug::LeakTracker<SystemURLRequestContextGetter>::CheckForLeaks();
 
@@ -291,7 +296,7 @@ net::URLRequestContextGetter* IOThread::system_url_request_context_getter() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (!system_url_request_context_getter_.get()) {
     system_url_request_context_getter_ =
-        new SystemURLRequestContextGetter(this);
+        base::MakeRefCounted<SystemURLRequestContextGetter>(this);
   }
   return system_url_request_context_getter_.get();
 }
@@ -386,22 +391,21 @@ bool IOThread::PacHttpsUrlStrippingEnabled() const {
 std::unique_ptr<net::HostResolver> CreateGlobalHostResolver(
     net::NetLog* net_log) {
   TRACE_EVENT0("startup", "IOThread::CreateGlobalHostResolver");
-  const base::CommandLine& command_line =
-      *base::CommandLine::ForCurrentProcess();
 
-  net::HostResolver::Options options;
-  std::unique_ptr<net::HostResolver> global_host_resolver;
-  global_host_resolver =
-      net::HostResolver::CreateSystemResolver(options, net_log);
+  using resolver = net::HostResolver;
+  std::unique_ptr<resolver> global_host_resolver =
+      resolver::CreateSystemResolver(resolver::Options(), net_log);
 
   // If hostname remappings were specified on the command-line, layer these
   // rules on top of the real host resolver. This allows forwarding all requests
   // through a designated test server.
+  const base::CommandLine& command_line =
+      *base::CommandLine::ForCurrentProcess();
   if (!command_line.HasSwitch(switches::kHostResolverRules))
     return global_host_resolver;
 
-  std::unique_ptr<net::MappedHostResolver> remapped_resolver(
-      new net::MappedHostResolver(std::move(global_host_resolver)));
+  auto remapped_resolver = std::make_unique<net::MappedHostResolver>(
+      std::move(global_host_resolver));
   remapped_resolver->SetRulesFromString(
       command_line.GetSwitchValueASCII(switches::kHostResolverRules));
   return std::move(remapped_resolver);
@@ -482,9 +486,6 @@ void IOThread::ConstructSystemRequestContext() {
       base::MakeUnique<net::MultiLogCTVerifier>();
   // Add built-in logs
   ct_verifier->AddLogs(globals_->ct_logs);
-
-  // Register the ct_tree_tracker_ as observer for verified SCTs.
-  ct_verifier->SetObserver(ct_tree_tracker_.get());
 
   builder->set_ct_verifier(std::move(ct_verifier));
 
