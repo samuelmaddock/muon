@@ -1058,6 +1058,23 @@ index c4c5f83886574956b3abdfa77a07500a2ee6de9e..edbfde3c41a1e38bcdedd09aaa41d8a1
    // State needed to manage service lifecycle and lifecycle of bound clients.
    std::unique_ptr<service_manager::ServiceContextRefFactory> ref_factory_;
    service_manager::BinderRegistry registry_;
+diff --git a/components/autofill/core/browser/autofill_manager.cc b/components/autofill/core/browser/autofill_manager.cc
+index 50d4ecb114c190f8a4ccb1608e6d0733ad3074f9..398be76fa3110bfea4f91c27b78ec216c949eb14 100644
+--- a/components/autofill/core/browser/autofill_manager.cc
++++ b/components/autofill/core/browser/autofill_manager.cc
+@@ -1834,6 +1834,12 @@ void AutofillManager::FillOrPreviewDataModelForm(
+     const AutofillField* cached_field = form_structure->field(i);
+     FieldTypeGroup field_group_type = cached_field->Type().group();
+ 
++    // MUON(darkdh): field requires focus to be filled
++    if (!form_structure->field(i)->SameFieldAs(field) &&
++        !(is_credit_card && cached_field->Type().GetStorableType() !=
++          CREDIT_CARD_NUMBER))
++      continue;
++
+     if (field_group_type == NO_GROUP)
+       continue;
+ 
 diff --git a/components/crash/content/app/breakpad_linux.cc b/components/crash/content/app/breakpad_linux.cc
 index 526c410915f3f0bbd6a0296ff8bca691e9506ac3..f3c33bdc1ecb7279d9a455827304147aeeff99b9 100644
 --- a/components/crash/content/app/breakpad_linux.cc
