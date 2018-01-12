@@ -106,9 +106,6 @@ const char kCdmHostVersionsName[] = "x-cdm-host-versions";
 //  The codecs list is a list of simple codec names (e.g. "vp8,vorbis").
 //  The list is passed to other parts of Chrome.
 const char kCdmCodecsListName[] = "x-cdm-codecs";
-//  Whether persistent license is supported by the CDM: "true" or "false".
-const char kCdmPersistentLicenseSupportName[] =
-    "x-cdm-persistent-license-support";
 
 // TODO(xhwang): Move this to a common place if needed.
 const base::FilePath::CharType kSignatureFileExtension[] =
@@ -128,7 +125,6 @@ base::FilePath GetPlatformDirectory(const base::FilePath& base_path) {
 bool MakeWidevineCdmPluginInfo(const base::Version& version,
                                const base::FilePath& cdm_install_dir,
                                const std::string& codecs,
-                               bool supports_persistent_license,
                                content::PepperPluginInfo* plugin_info) {
   if (!version.IsValid() ||
       version.components().size() !=
@@ -153,9 +149,6 @@ bool MakeWidevineCdmPluginInfo(const base::Version& version,
       kWidevineCdmPluginMimeTypeDescription);
   widevine_cdm_mime_type.additional_params.emplace_back(
       base::ASCIIToUTF16(kCdmSupportedCodecsParamName),
-      base::ASCIIToUTF16(supports_persistent_license
-                              ? kCdmFeatureSupported
-                              : kCdmFeatureNotSupported),
       base::ASCIIToUTF16(codecs));
 
   plugin_info->mime_types.push_back(widevine_cdm_mime_type);
@@ -415,7 +408,7 @@ void WidevineCdmComponentInstallerPolicy::RegisterWidevineCdmWithBrave(
 
   content::PepperPluginInfo plugin_info;
   if (!MakeWidevineCdmPluginInfo(cdm_version, cdm_install_dir, codecs,
-                                 supports_persistent_license, &plugin_info)) {
+                                 &plugin_info)) {
     return;
   }
 
@@ -433,13 +426,12 @@ void WidevineCdmComponentInstallerPolicy::RegisterWidevineCdmWithBrave(
   const base::FilePath cdm_path =
       GetPlatformDirectory(cdm_install_dir)
           .AppendASCII(base::GetNativeLibraryName(kWidevineCdmLibraryName));
-  std::vector<media::VideoCodec> supported_video_codecs =
-      ConvertCodecsString(codecs);
-
+  const std::vector<std::string> supported_codecs = base::SplitString(
+      codecs, std::string(1, kCdmSupportedCodecsValueDelimiter),
+      base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
   CdmRegistry::GetInstance()->RegisterCdm(content::CdmInfo(
       kWidevineCdmDisplayName, kWidevineCdmGuid, cdm_version, cdm_path,
-      kWidevineCdmFileSystemId, supported_video_codecs,
-      supports_persistent_license, kWidevineKeySystem, false));
+      kWidevineCdmFileSystemId, supported_codecs, kWidevineKeySystem, false));
 
   ready_callback_.Run(cdm_install_dir);
 }
