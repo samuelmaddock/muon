@@ -4,7 +4,7 @@
 
 #include "atom/browser/atom_quota_permission_context.h"
 
-#include "third_party/WebKit/common/quota/storage_type.h"
+#include "storage/common/quota/quota_types.h"
 
 namespace atom {
 
