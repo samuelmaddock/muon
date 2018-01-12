@@ -271,7 +271,7 @@ CommonWebContentsDelegate::GetJavaScriptDialogManager(
 content::ColorChooser* CommonWebContentsDelegate::OpenColorChooser(
     content::WebContents* web_contents,
     SkColor color,
-    const std::vector<content::mojom::ColorSuggestionPtr>& suggestions) {
+    const std::vector<blink::mojom::ColorSuggestionPtr>& suggestions) {
   return chrome::ShowColorChooser(web_contents, color);
 }
 
