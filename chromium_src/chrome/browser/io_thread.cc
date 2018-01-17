@@ -23,8 +23,11 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/network_service_instance.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/network/ignore_errors_cert_verifier.h"
+#include "content/public/network/network_service.h"
 #include "content/public/network/url_request_context_builder_mojo.h"
 #include "extensions/features/features.h"
 #include "net/cert/cert_verifier.h"
@@ -74,7 +77,6 @@ IOThread::IOThread(
 #endif
       globals_(nullptr),
       is_quic_allowed_on_init_(false),
-      network_service_request_(mojo::MakeRequest(&ui_thread_network_service_)),
       weak_factory_(this) {
   scoped_refptr<base::SingleThreadTaskRunner> io_thread_proxy =
       BrowserThread::GetTaskRunnerForThread(BrowserThread::IO);
@@ -312,7 +314,7 @@ void IOThread::ClearHostCache(
 
 void IOThread::DisableQuic() {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  globals_->network_service->DisableQuic();
+  globals_->quic_disabled = true;
 }
 
 net::SSLConfigService* IOThread::GetSSLConfigService() {
@@ -433,21 +435,6 @@ IOThread::CreateDefaultAuthHandlerFactory(net::HostResolver* host_resolver) {
 
 void IOThread::SetUpProxyService(
     content::URLRequestContextBuilderMojo* builder) const {
-  const base::CommandLine& command_line =
-      *base::CommandLine::ForCurrentProcess();
-
-  // TODO(eroman): Figure out why this doesn't work in single-process mode.
-  // Should be possible now that a private isolate is used.
-  // http://crbug.com/474654
-  if (!command_line.HasSwitch(switches::kWinHttpProxyResolver)) {
-    if (command_line.HasSwitch(switches::kSingleProcess)) {
-      LOG(ERROR) << "Cannot use V8 Proxy resolver in single process mode.";
-    } else {
-      builder->SetMojoProxyResolverFactory(
-          ChromeMojoProxyResolverFactory::CreateWithStrongBinding());
-    }
-  }
-
   builder->set_pac_quick_check_enabled(WpadQuickCheckEnabled());
   builder->set_pac_sanitize_url_policy(
       PacHttpsUrlStrippingEnabled()
@@ -491,15 +478,22 @@ void IOThread::ConstructSystemRequestContext() {
 
   SetUpProxyService(builder.get());
 
-  globals_->network_service = content::NetworkService::Create(
-      std::move(network_service_request_), net_log_);
-  globals_->network_service->DisableQuic();
+  globals_->quic_disabled = true;
 
-  globals_->system_network_context =
-      globals_->network_service->CreateNetworkContextWithBuilder(
-          std::move(network_context_request_),
-          std::move(network_context_params_), std::move(builder),
-          &globals_->system_request_context);
+  if (base::FeatureList::IsEnabled(features::kNetworkService)) {
+    globals_->system_request_context_owner =
+        std::move(builder)->Create(std::move(network_context_params_).get(),
+                                   !is_quic_allowed_on_init_, net_log_);
+    globals_->system_request_context =
+        globals_->system_request_context_owner.url_request_context.get();
+  } else {
+    globals_->system_network_context =
+        content::GetNetworkServiceImpl()->CreateNetworkContextWithBuilder(
+            std::move(network_context_request_),
+            std::move(network_context_params_), std::move(builder),
+            &globals_->system_request_context);
+  }
+
 
 #if defined(USE_NSS_CERTS)
   net::SetURLRequestContextForNSSHttpIO(globals_->system_request_context);
