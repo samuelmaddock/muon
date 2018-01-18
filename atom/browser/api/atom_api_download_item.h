@@ -46,6 +46,7 @@ class DownloadItem : public mate::TrackableObject<DownloadItem>,
   std::string GetGuid() const;
   void SetPrompt(bool prompt);
   bool ShouldPrompt();
+  bool IsDangerous() const;
 
  protected:
   DownloadItem(v8::Isolate* isolate, content::DownloadItem* download_item);

@@ -30,6 +30,7 @@
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/env_vars.h"
 #include "chrome/common/importer/profile_import.mojom.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/common/render_messages.h"
 #include "chrome/common/renderer_configuration.mojom.h"
 #include "chrome/grit/generated_resources.h"
@@ -664,7 +665,9 @@ void BraveContentBrowserClient::OverrideWebkitPrefs(
   prefs->hyperlink_auditing_enabled = false;
   // Custom preferences of guest page.
   auto web_contents = content::WebContents::FromRenderViewHost(host);
-  atom::WebContentsPreferences::OverrideWebkitPrefs(web_contents, prefs);
+  if (web_contents) {
+    atom::WebContentsPreferences::OverrideWebkitPrefs(web_contents, prefs);
+  }
   #if BUILDFLAG(ENABLE_EXTENSIONS)
     extensions_part_->OverrideWebkitPrefs(host, prefs);
   #endif

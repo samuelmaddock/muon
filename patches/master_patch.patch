@@ -159,6 +159,159 @@ index 751043efd8038573b2870dc60e5d7ad737887d5f..321971b975659028005aabd8a9163ac8
            "safe_browsing::mojom::SafeBrowsing",
            "spellcheck::mojom::SpellCheckHost",
            "spellcheck::mojom::SpellCheckPanelHost",
+diff --git a/chrome/browser/download/download_target_determiner.cc b/chrome/browser/download/download_target_determiner.cc
+index 4f4dadd98fd997e9659d10e6989916dbb0bb899e..6c90abf8967dd01226c72c1f2ce77feb2a025680 100644
+--- a/chrome/browser/download/download_target_determiner.cc
++++ b/chrome/browser/download/download_target_determiner.cc
+@@ -16,7 +16,6 @@
+ #include "base/threading/thread_task_runner_handle.h"
+ #include "base/time/time.h"
+ #include "chrome/browser/download/chrome_download_manager_delegate.h"
+-#include "chrome/browser/download/download_crx_util.h"
+ #include "chrome/browser/download/download_prefs.h"
+ #include "chrome/browser/download/download_stats.h"
+ #include "chrome/browser/history/history_service_factory.h"
+@@ -92,7 +91,7 @@ DownloadTargetDeterminer::DownloadTargetDeterminer(
+     DownloadPrefs* download_prefs,
+     DownloadTargetDeterminerDelegate* delegate,
+     const CompletionCallback& callback)
+-    : next_state_(STATE_GENERATE_TARGET_PATH),
++    : next_state_(STATE_CHECK_DOWNLOAD_URL),
+       confirmation_reason_(DownloadConfirmationReason::NONE),
+       should_notify_extensions_(false),
+       create_target_directory_(false),
+@@ -278,15 +277,7 @@ DownloadTargetDeterminer::Result
+   DCHECK(!virtual_path_.empty());
+ 
+   next_state_ = STATE_RESERVE_VIRTUAL_PATH;
+-
+-  if (!should_notify_extensions_ ||
+-      download_->GetState() != DownloadItem::IN_PROGRESS)
+-    return CONTINUE;
+-
+-  delegate_->NotifyExtensions(download_, virtual_path_,
+-      base::Bind(&DownloadTargetDeterminer::NotifyExtensionsDone,
+-                 weak_ptr_factory_.GetWeakPtr()));
+-  return QUIT_DOLOOP;
++  return CONTINUE;
+ }
+ 
+ void DownloadTargetDeterminer::NotifyExtensionsDone(
+@@ -306,8 +297,7 @@ void DownloadTargetDeterminer::NotifyExtensionsDone(
+     // last_download_path/music/foo.mp3, then last_download_path will accumulate
+     // the subdirectory /music/ so that the next download may end up in
+     // Downloads/music/music/music/bar.mp3.
+-    base::FilePath new_path(download_prefs_->DownloadPath().Append(
+-        suggested_path).NormalizePathSeparators());
++    base::FilePath new_path(suggested_path.NormalizePathSeparators());
+     // Do not pass a mime type to GenerateSafeFileName so that it does not force
+     // the filename to have an extension if the (Chrome) extension does not
+     // suggest it.
+@@ -327,7 +317,7 @@ DownloadTargetDeterminer::Result
+   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+   DCHECK(!virtual_path_.empty());
+ 
+-  next_state_ = STATE_PROMPT_USER_FOR_DOWNLOAD_PATH;
++  next_state_ = STATE_DETERMINE_LOCAL_PATH;
+   if (download_->GetState() != DownloadItem::IN_PROGRESS)
+     return CONTINUE;
+ 
+@@ -392,7 +382,6 @@ void DownloadTargetDeterminer::ReserveVirtualPathDone(
+         NOTREACHED();
+     }
+   }
+-
+   DoLoop();
+ }
+ 
+@@ -439,7 +428,6 @@ void DownloadTargetDeterminer::RequestConfirmationDone(
+     confirmation_reason_ = DownloadConfirmationReason::NONE;
+ 
+   virtual_path_ = virtual_path;
+-  download_prefs_->SetSaveFilePath(virtual_path_.DirName());
+   DoLoop();
+ }
+ 
+@@ -449,7 +437,7 @@ DownloadTargetDeterminer::Result
+   DCHECK(!virtual_path_.empty());
+   DCHECK(local_path_.empty());
+ 
+-  next_state_ = STATE_DETERMINE_MIME_TYPE;
++  next_state_ = STATE_CHECK_VISITED_REFERRER_BEFORE;
+ 
+   delegate_->DetermineLocalPath(
+       download_,
+@@ -650,7 +638,7 @@ DownloadTargetDeterminer::Result
+     DownloadTargetDeterminer::DoCheckDownloadUrl() {
+   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+   DCHECK(!virtual_path_.empty());
+-  next_state_ = STATE_CHECK_VISITED_REFERRER_BEFORE;
++  next_state_ = STATE_RESERVE_VIRTUAL_PATH;
+ 
+   // If user has validated a dangerous download, don't check.
+   if (danger_type_ == content::DOWNLOAD_DANGER_TYPE_USER_VALIDATED)
+@@ -888,35 +876,12 @@ DownloadConfirmationReason DownloadTargetDeterminer::NeedsConfirmation(
+     return DownloadConfirmationReason::NONE;
+   }
+ 
+-  // Don't ask where to save if the download path is managed. Even if the user
+-  // wanted to be prompted for "all" downloads, or if this was a 'Save As'
+-  // download.
+-  if (download_prefs_->IsDownloadPathManaged())
+-    return DownloadConfirmationReason::NONE;
+-
+   // Prompt if this is a 'Save As' download.
+   if (download_->GetTargetDisposition() ==
+       DownloadItem::TARGET_DISPOSITION_PROMPT)
+     return DownloadConfirmationReason::SAVE_AS;
+ 
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
+-  // Don't prompt for extension downloads.
+-  if (download_crx_util::IsExtensionDownload(*download_) ||
+-      filename.MatchesExtension(extensions::kExtensionFileExtension))
+-    return DownloadConfirmationReason::NONE;
+-#endif
+-
+-  // Don't prompt for file types that are marked for opening automatically.
+-  if (download_prefs_->IsAutoOpenEnabledBasedOnExtension(filename))
+-    return DownloadConfirmationReason::NONE;
+-
+-  // For everything else, prompting is controlled by the PromptForDownload pref.
+-  // The user may still be prompted even if this pref is disabled due to, for
+-  // example, there being an unresolvable filename conflict or the target path
+-  // is not writeable.
+-  return download_prefs_->PromptForDownload()
+-             ? DownloadConfirmationReason::PREFERENCE
+-             : DownloadConfirmationReason::NONE;
++  return DownloadConfirmationReason::NONE;
+ }
+ 
+ bool DownloadTargetDeterminer::HasPromptedForPath() const {
+@@ -936,23 +901,12 @@ DownloadFileType::DangerLevel DownloadTargetDeterminer::GetDangerLevel(
+       !download_->GetForcedFilePath().empty())
+     return DownloadFileType::NOT_DANGEROUS;
+ 
+-  const bool is_extension_download =
+-      download_crx_util::IsExtensionDownload(*download_);
+-
+   // User-initiated extension downloads from pref-whitelisted sources are not
+   // considered dangerous.
+-  if (download_->HasUserGesture() &&
+-      is_extension_download &&
+-      download_crx_util::OffStoreInstallAllowedByPrefs(
+-          GetProfile(), *download_)) {
++  if (download_->HasUserGesture()) {
+     return DownloadFileType::NOT_DANGEROUS;
+   }
+ 
+-  // Anything the user has marked auto-open is OK if it's user-initiated.
+-  if (download_prefs_->IsAutoOpenEnabledBasedOnExtension(virtual_path_) &&
+-      download_->HasUserGesture())
+-    return DownloadFileType::NOT_DANGEROUS;
+-
+   DownloadFileType::DangerLevel danger_level =
+       safe_browsing::FileTypePolicies::GetInstance()->GetFileDangerLevel(
+           virtual_path_.BaseName());
 diff --git a/chrome/browser/importer/external_process_importer_client.h b/chrome/browser/importer/external_process_importer_client.h
 index 864a6951115dda5ed74963f18b35692960397d50..3e1a2b719521ac2c60bae05f94e409bc4c7da022 100644
 --- a/chrome/browser/importer/external_process_importer_client.h
@@ -201,6 +354,105 @@ index 247d24220beb7d176b890d7c2d45bdd2dfd8db99..c270bba0fabb557e8d3d1df8ac166bbb
  
    ProfileWriter* const writer_;  // weak
    const base::WeakPtr<ExternalProcessImporterHost> host_;
+diff --git a/chrome/browser/interstitials/chrome_metrics_helper.cc b/chrome/browser/interstitials/chrome_metrics_helper.cc
+index 860c919d1a656acf63a5a0875484d59d5dd40515..35c9a27119148fbce09e70771d301a3817a932f2 100644
+--- a/chrome/browser/interstitials/chrome_metrics_helper.cc
++++ b/chrome/browser/interstitials/chrome_metrics_helper.cc
+@@ -12,10 +12,6 @@
+ #include "content/public/browser/web_contents.h"
+ #include "extensions/features/features.h"
+ 
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
+-#include "chrome/browser/extensions/api/experience_sampling_private/experience_sampling.h"
+-#endif
+-
+ #if BUILDFLAG(ENABLE_CAPTIVE_PORTAL_DETECTION)
+ #include "chrome/browser/ssl/captive_portal_metrics_recorder.h"
+ #endif
+@@ -59,58 +55,8 @@ void ChromeMetricsHelper::RecordExtraShutdownMetrics() {
+ 
+ void ChromeMetricsHelper::RecordExtraUserDecisionMetrics(
+     security_interstitials::MetricsHelper::Decision decision) {
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
+-  if (!sampling_event_.get()) {
+-    sampling_event_.reset(new extensions::ExperienceSamplingEvent(
+-        sampling_event_name_, request_url_,
+-        web_contents_->GetLastCommittedURL(),
+-        web_contents_->GetBrowserContext()));
+-  }
+-  switch (decision) {
+-    case PROCEED:
+-      sampling_event_->CreateUserDecisionEvent(
+-          extensions::ExperienceSamplingEvent::kProceed);
+-      break;
+-    case DONT_PROCEED:
+-      sampling_event_->CreateUserDecisionEvent(
+-          extensions::ExperienceSamplingEvent::kDeny);
+-      break;
+-    case SHOW:
+-    case PROCEEDING_DISABLED:
+-    case MAX_DECISION:
+-      break;
+-  }
+-#endif
+ }
+ 
+ void ChromeMetricsHelper::RecordExtraUserInteractionMetrics(
+     security_interstitials::MetricsHelper::Interaction interaction) {
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
+-  if (!sampling_event_.get()) {
+-    sampling_event_.reset(new extensions::ExperienceSamplingEvent(
+-        sampling_event_name_, request_url_,
+-        web_contents_->GetLastCommittedURL(),
+-        web_contents_->GetBrowserContext()));
+-  }
+-  switch (interaction) {
+-    case SHOW_LEARN_MORE:
+-      sampling_event_->set_has_viewed_learn_more(true);
+-      break;
+-    case SHOW_ADVANCED:
+-      sampling_event_->set_has_viewed_details(true);
+-      break;
+-    case SHOW_PRIVACY_POLICY:
+-    case SHOW_DIAGNOSTIC:
+-    case RELOAD:
+-    case OPEN_TIME_SETTINGS:
+-    case TOTAL_VISITS:
+-    case SET_EXTENDED_REPORTING_ENABLED:
+-    case SET_EXTENDED_REPORTING_DISABLED:
+-    case EXTENDED_REPORTING_IS_ENABLED:
+-    case REPORT_PHISHING_ERROR:
+-    case SHOW_WHITEPAPER:
+-    case MAX_INTERACTION:
+-      break;
+-  }
+-#endif
+ }
+diff --git a/chrome/browser/interstitials/chrome_metrics_helper.h b/chrome/browser/interstitials/chrome_metrics_helper.h
+index 641f7d9f74656271a9271c57bbd0f216ddc8dc0a..18e3785ee539d5a267f0a8a94784c1d1f7f3612a 100644
+--- a/chrome/browser/interstitials/chrome_metrics_helper.h
++++ b/chrome/browser/interstitials/chrome_metrics_helper.h
+@@ -17,10 +17,6 @@ namespace content {
+ class WebContents;
+ }
+ 
+-namespace extensions {
+-class ExperienceSamplingEvent;
+-}
+-
+ class CaptivePortalMetricsRecorder;
+ 
+ // This class adds desktop-Chrome-specific metrics (extension experience
+@@ -53,9 +49,6 @@ class ChromeMetricsHelper : public security_interstitials::MetricsHelper {
+ #endif
+   const GURL request_url_;
+   const std::string sampling_event_name_;
+-#if BUILDFLAG(ENABLE_EXTENSIONS)
+-  std::unique_ptr<extensions::ExperienceSamplingEvent> sampling_event_;
+-#endif
+ #if BUILDFLAG(ENABLE_CAPTIVE_PORTAL_DETECTION)
+   std::unique_ptr<CaptivePortalMetricsRecorder> captive_portal_recorder_;
+ #endif
 diff --git a/chrome/browser/metrics/metrics_reporting_state.cc b/chrome/browser/metrics/metrics_reporting_state.cc
 index 183a1e7a246c01a1500a9a05e055f892deaffe56..5172ed442244f26a674c650705d96282ae6ec836 100644
 --- a/chrome/browser/metrics/metrics_reporting_state.cc
@@ -509,6 +761,104 @@ index 7ee1ec91e6ecb8cd9e237f0e67063ed704566ea6..9198607c50f23d7757016dcfb7526993
    // Finds TabStripModel which has a WebContents whose id is the given
    // web_contents_id, and returns the WebContents index and the TabStripModel.
    int FindTabStripModelById(int64_t target_web_contents_id,
+diff --git a/chrome/browser/safe_browsing/download_protection/check_client_download_request.cc b/chrome/browser/safe_browsing/download_protection/check_client_download_request.cc
+index ea9b0d6e9c8666c91cf2704915da95d682d633d2..a1032d258a02ae66dbbeca8a362afab5a39d837e 100644
+--- a/chrome/browser/safe_browsing/download_protection/check_client_download_request.cc
++++ b/chrome/browser/safe_browsing/download_protection/check_client_download_request.cc
+@@ -290,11 +290,6 @@ bool CheckClientDownloadRequest::IsSupportedDownload(
+     *reason = final_url.has_host() ? REASON_REMOTE_FILE : REASON_LOCAL_FILE;
+     return false;
+   }
+-  // This check should be last, so we know the earlier checks passed.
+-  if (!FileTypePolicies::GetInstance()->IsCheckedBinaryFile(target_path)) {
+-    *reason = REASON_NOT_BINARY_FILE;
+-    return false;
+-  }
+   *type = download_protection_util::GetDownloadType(target_path);
+   return true;
+ }
+diff --git a/chrome/browser/safe_browsing/download_protection/download_url_sb_client.cc b/chrome/browser/safe_browsing/download_protection/download_url_sb_client.cc
+index 9763c38c680c69044ed89c89ea09e10255439fcb..3d6b7015996c864f86209650db00c65bcad942cd 100644
+--- a/chrome/browser/safe_browsing/download_protection/download_url_sb_client.cc
++++ b/chrome/browser/safe_browsing/download_protection/download_url_sb_client.cc
+@@ -120,8 +120,6 @@ void DownloadUrlSBClient::ReportMalware(SBThreatType threat_type) {
+   hit_report.extended_reporting_level = extended_reporting_level_;
+   hit_report.is_metrics_reporting_active =
+       ChromeMetricsServiceAccessor::IsMetricsAndCrashReportingEnabled();
+-
+-  ui_manager_->MaybeReportSafeBrowsingHit(hit_report, item_->GetWebContents());
+ }
+ 
+ void DownloadUrlSBClient::IdentifyReferrerChain() {
+diff --git a/chrome/browser/safe_browsing/safe_browsing_blocking_page.cc b/chrome/browser/safe_browsing/safe_browsing_blocking_page.cc
+index 5b50863736f2306202e8345d83be2f399ed2c371..655cb90ef69156802b1f227f7f31210c6d83beae 100644
+--- a/chrome/browser/safe_browsing/safe_browsing_blocking_page.cc
++++ b/chrome/browser/safe_browsing/safe_browsing_blocking_page.cc
+@@ -194,20 +194,6 @@ void SafeBrowsingBlockingPage::FinishThreatDetails(const base::TimeDelta& delay,
+   // shutting down.
+   if (!g_browser_process->safe_browsing_service())
+     return;
+-
+-  // Finish computing threat details. TriggerManager will decide if its safe to
+-  // send the report.
+-  bool report_sent = g_browser_process->safe_browsing_service()
+-                         ->trigger_manager()
+-                         ->FinishCollectingThreatDetails(
+-                             TriggerType::SECURITY_INTERSTITIAL, web_contents(),
+-                             delay, did_proceed, num_visits,
+-                             sb_error_ui()->get_error_display_options());
+-
+-  if (report_sent) {
+-    controller()->metrics_helper()->RecordUserInteraction(
+-        security_interstitials::MetricsHelper::EXTENDED_REPORTING_IS_ENABLED);
+-  }
+ }
+ 
+ // static
+diff --git a/chrome/browser/safe_browsing/safe_browsing_service.cc b/chrome/browser/safe_browsing/safe_browsing_service.cc
+index b30ec89669e6734f1f319d49ac2568858685a30f..a349124807aa0725a25aefc0bc0804cb9af7f1db 100644
+--- a/chrome/browser/safe_browsing/safe_browsing_service.cc
++++ b/chrome/browser/safe_browsing/safe_browsing_service.cc
+@@ -469,17 +469,13 @@ void SafeBrowsingService::Observe(int type,
+     case chrome::NOTIFICATION_PROFILE_CREATED: {
+       DCHECK_CURRENTLY_ON(BrowserThread::UI);
+       Profile* profile = content::Source<Profile>(source).ptr();
+-      services_delegate_->CreatePasswordProtectionService(profile);
+-      if (!profile->IsOffTheRecord())
+-        AddPrefService(profile->GetPrefs());
++      AddPrefService(profile->GetPrefs());
+       break;
+     }
+     case chrome::NOTIFICATION_PROFILE_DESTROYED: {
+       DCHECK_CURRENTLY_ON(BrowserThread::UI);
+       Profile* profile = content::Source<Profile>(source).ptr();
+-      services_delegate_->RemovePasswordProtectionService(profile);
+-      if (!profile->IsOffTheRecord())
+-        RemovePrefService(profile->GetPrefs());
++      RemovePrefService(profile->GetPrefs());
+       break;
+     }
+     default:
+diff --git a/chrome/browser/safe_browsing/services_delegate_impl.cc b/chrome/browser/safe_browsing/services_delegate_impl.cc
+index d3814b98f3590ea9a888d654a35dae7ecaac04a1..53cffdc8e82045ba7dd830fac45e70e27325dc3a 100644
+--- a/chrome/browser/safe_browsing/services_delegate_impl.cc
++++ b/chrome/browser/safe_browsing/services_delegate_impl.cc
+@@ -183,14 +183,7 @@ void ServicesDelegateImpl::StopOnIOThread(bool shutdown) {
+ }
+ 
+ void ServicesDelegateImpl::CreatePasswordProtectionService(Profile* profile) {
+-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+-  DCHECK(profile);
+-  auto it = password_protection_service_map_.find(profile);
+-  DCHECK(it == password_protection_service_map_.end());
+-  std::unique_ptr<ChromePasswordProtectionService> service =
+-      base::MakeUnique<ChromePasswordProtectionService>(safe_browsing_service_,
+-                                                        profile);
+-  password_protection_service_map_[profile] = std::move(service);
++  return;
+ }
+ 
+ void ServicesDelegateImpl::RemovePasswordProtectionService(Profile* profile) {
 diff --git a/chrome/common/BUILD.gn b/chrome/common/BUILD.gn
 index 476a165dd2b1f4d724c3b2a5d8fd30b994d1dd05..d9dd99e293a4adcd357927023f38f289718bdfad 100644
 --- a/chrome/common/BUILD.gn
@@ -1814,6 +2164,19 @@ index bf0ece1e723ba1a0644961cfd3a01ce3c14c892a..5e7d3dbb9da51a5abb0447bc04c90c9b
                                    HolderIsFirstArgument);
    }
    static void SetAsFunctionHandler(v8::Isolate* isolate,
+diff --git a/google_apis/google_api_keys.cc b/google_apis/google_api_keys.cc
+index 2e8437ed136e682540835ef4738e3519f9cb6051..4ec8bd06b4ee76a398947540c76e2450ed4cdcca 100644
+--- a/google_apis/google_api_keys.cc
++++ b/google_apis/google_api_keys.cc
+@@ -28,7 +28,7 @@
+ 
+ // Used to indicate an unset key/id/secret.  This works better with
+ // various unit tests than leaving the token empty.
+-#define DUMMY_API_TOKEN "dummytoken"
++#define DUMMY_API_TOKEN "AIzaSyAH90V94EcZBP5oH7oc-mXQrSKgASVxER8"
+ 
+ #if !defined(GOOGLE_API_KEY)
+ #define GOOGLE_API_KEY DUMMY_API_TOKEN
 diff --git a/media/base/media_switches.cc b/media/base/media_switches.cc
 index f1a096e649290ef2e2ce2cc30891f547a6dc196f..1338eb43287476a108454e316dbfb853c000f1b4 100644
 --- a/media/base/media_switches.cc
@@ -1921,10 +2284,10 @@ index 19c7b569f19849f8fbb26c1faf2ac52f8fe7c566..0294416a183a13cd925adf89dd587289
    if (GetWebMediaPlayer())
      GetWebMediaPlayer()->SetVolume(EffectiveMediaVolume());
 diff --git a/third_party/WebKit/Source/core/html/media/AutoplayPolicy.cpp b/third_party/WebKit/Source/core/html/media/AutoplayPolicy.cpp
-index 9162bc3ba51153a494aa218007511054cdebbad7..4346960346913bd4c99d3fb34540955919749eb1 100644
+index 9162bc3ba51153a494aa218007511054cdebbad7..96ff31910ae3ba49f74e14da464758d458911ecc 100644
 --- a/third_party/WebKit/Source/core/html/media/AutoplayPolicy.cpp
 +++ b/third_party/WebKit/Source/core/html/media/AutoplayPolicy.cpp
-@@ -275,6 +275,12 @@ bool AutoplayPolicy::IsGestureNeededForPlaybackIfPendingUserGestureIsLocked()
+@@ -275,6 +275,10 @@ bool AutoplayPolicy::IsGestureNeededForPlaybackIfPendingUserGestureIsLocked()
    if (element_->GetLoadType() == WebMediaPlayer::kLoadTypeMediaStream)
      return false;
  
@@ -1932,24 +2295,30 @@ index 9162bc3ba51153a494aa218007511054cdebbad7..4346960346913bd4c99d3fb345409559
 +  if (element_->GetDocument().origin() == String("null"))
 +    return false;
 +
-+  // MUON(darkdh): prompt autoply permission even for muted video
-+#if defined(MUON_CHROMIUM_BUILD)
    // We want to allow muted video to autoplay if:
    // - the flag is enabled;
    // - Data Saver is not enabled;
-@@ -291,6 +297,12 @@ bool AutoplayPolicy::IsGestureNeededForPlaybackIfPendingUserGestureIsLocked()
+@@ -288,10 +292,20 @@ bool AutoplayPolicy::IsGestureNeededForPlaybackIfPendingUserGestureIsLocked()
+         element_->GetDocument()
+             .GetSettings()
+             ->GetForcePreloadNoneForMediaElements()) &&
++      // MUON(darkdh): don't prompt for autoplay permission for muted videos
++#if defined(MUON_CHROMIUM_BUILD)
        IsAutoplayAllowedPerSettings()) {
++#else
++      true) {
++#endif
      return false;
    }
-+#endif
-+
+ 
 +  // MUON(darkdh): prompt for autoplay permission
 +  if ((element_->IsHTMLVideoElement() || element_->IsAudioElement()) &&
 +      IsAutoplayAllowedPerSettings())
 +    return false;
- 
++
    return true;
  }
+ 
 diff --git a/third_party/WebKit/Source/platform/bindings/V8PerIsolateData.cpp b/third_party/WebKit/Source/platform/bindings/V8PerIsolateData.cpp
 index 7ee2fa858b93e1dd42ac27f982fb61eaf597aad4..b1c96c229077859865fd5ea03cdbd7747880e216 100644
 --- a/third_party/WebKit/Source/platform/bindings/V8PerIsolateData.cpp

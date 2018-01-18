@@ -36,6 +36,7 @@
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_filter.h"
 #include "components/pref_registry/pref_registry_syncable.h"
+#include "components/safe_browsing/common/safe_browsing_prefs.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "components/sync_preferences/pref_service_syncable_factory.h"
 #include "components/user_prefs/user_prefs.h"
@@ -449,6 +450,7 @@ void BraveBrowserContext::CreateProfilePrefs(
     pref_registry_->RegisterDictionaryPref(prefs::kPartitionPerHostZoomLevels);
     pref_registry_->RegisterBooleanPref(prefs::kPrintingEnabled, true);
     pref_registry_->RegisterBooleanPref(prefs::kPrintPreviewDisabled, false);
+    pref_registry_->RegisterBooleanPref(prefs::kSafeBrowsingEnabled, true);
 #if BUILDFLAG(ENABLE_PLUGINS)
     PluginInfoMessageFilter::RegisterUserPrefs(pref_registry_.get());
     PepperFlashSettingsManager::RegisterProfilePrefs(pref_registry_.get());
@@ -724,4 +726,3 @@ AtomBrowserContext* AtomBrowserContext::From(
 }
 
 }  // namespace atom
-

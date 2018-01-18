@@ -7,6 +7,7 @@
 
 #include "build/build_config.h"
 #include "chrome/browser/browser_process_impl.h"
+#include "net/socket/client_socket_pool_manager.h"
 
 class ChromeDeviceClient;
 
@@ -34,7 +35,16 @@ class MuonBrowserProcessImpl : public BrowserProcessImpl {
   component_updater::ComponentUpdateService* component_updater() override;
 
   void ResourceDispatcherHostCreated() override;
+  safe_browsing::SafeBrowsingService* safe_browsing_service() override;
+  safe_browsing::ClientSideDetectionService* safe_browsing_detection_service()
+      override;
+
  private:
+  void ApplyAllowCrossOriginAuthPromptPolicy();
+  void CreateSafeBrowsingService();
+  void CreateSafeBrowsingDetectionService();
+
+  std::unique_ptr<PrefService> local_state_;
   atom::api::App* app_;  // not owned
 
   std::unique_ptr<atom::AtomResourceDispatcherHostDelegate>
@@ -50,6 +60,12 @@ class MuonBrowserProcessImpl : public BrowserProcessImpl {
 
   std::unique_ptr<ChromeDeviceClient> device_client_;
 
+  bool created_safe_browsing_service_;
+  scoped_refptr<safe_browsing::SafeBrowsingService> safe_browsing_service_;
+
+  // Ensures that the observers of plugin/print disable/enable state
+  // notifications are properly added and removed.
+  PrefChangeRegistrar pref_change_registrar_;
   DISALLOW_COPY_AND_ASSIGN(MuonBrowserProcessImpl);
 };
 
