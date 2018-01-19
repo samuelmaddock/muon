@@ -9,7 +9,6 @@
 #include "atom/browser/api/atom_api_download_item.h"
 #include "atom/browser/native_window.h"
 #include "atom/browser/ui/file_dialog.h"
-#include "atom/browser/ui/message_box.h"
 #include "base/bind.h"
 #include "base/files/file_util.h"
 #include "chrome/browser/browser_process.h"
@@ -41,10 +40,6 @@ using safe_browsing::DownloadProtectionService;
 
 #if defined(FULL_SAFE_BROWSING)
 
-const base::string16 safeBrowsingError = base::ASCIIToUTF16("Malware Download");
-const base::string16 safeBrowsingContent
-                        = base::ASCIIToUTF16("Downloading Malicious Content");
-
 // String pointer used for identifying safebrowing data associated with
 // a download item.
 const char kSafeBrowsingUserDataKey[] = "Safe Browsing ID";
@@ -61,39 +56,6 @@ class SafeBrowsingState : public DownloadCompletionBlocker {
 
 SafeBrowsingState::~SafeBrowsingState() {}
 
-#endif  // FULL_SAFE_BROWSING
-
-// Used with GetPlatformDownloadPath() to indicate which platform path to
-// return.
-enum PlatformDownloadPathType {
-  // Return the platform specific target path.
-  PLATFORM_TARGET_PATH,
-
-  // Return the platform specific current path. If the download is in-progress
-  // and the download location is a local filesystem path, then
-  // GetPlatformDownloadPath will return the path to the intermediate file.
-  PLATFORM_CURRENT_PATH
-};
-
-base::FilePath GetPlatformDownloadPath(Profile* profile,
-                                       const DownloadItem* download,
-                                       PlatformDownloadPathType path_type) {
-  if (path_type == PLATFORM_TARGET_PATH)
-    return download->GetTargetFilePath();
-  return download->GetFullPath();
-}
-
-// Reason for why danger type is DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE.
-// Used by "Download.DangerousFile.Reason" UMA metric.
-// Do not change the ordering or remove items.
-enum DangerousFileReason {
-  SB_NOT_AVAILABLE = 0,
-  SB_RETURNS_UNKOWN = 1,
-  SB_RETURNS_SAFE = 2,
-  DANGEROUS_FILE_REASON_MAX
-};
-
-#if defined(FULL_SAFE_BROWSING)
 void CheckDownloadUrlDone(
     const DownloadTargetDeterminerDelegate::CheckDownloadUrlCallback& callback,
     safe_browsing::DownloadCheckResult result) {
@@ -172,23 +134,15 @@ bool AtomDownloadManagerDelegate::IsDownloadReadyForCompletion(
              content::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT)) {
       DVLOG(2) << __func__
                << "() SB service disabled. Marking download as DANGEROUS FILE";
-      if (ShouldBlockFile(content::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE)) {
-        item->OnContentCheckCompleted(
-            // Specifying a dangerous type here would take precendence over the
-            // blocking of the file.
-            content::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-            content::DOWNLOAD_INTERRUPT_REASON_FILE_BLOCKED);
-      } else {
-        item->OnContentCheckCompleted(
+      item->OnContentCheckCompleted(
             content::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE,
-            content::DOWNLOAD_INTERRUPT_REASON_NONE);
-      }
+            content::DOWNLOAD_INTERRUPT_REASON_FILE_BLOCKED);
+
       content::BrowserThread::PostTask(content::BrowserThread::UI, FROM_HERE,
                                        internal_complete_callback);
       return false;
     }
   } else if (!state->is_complete()) {
-    // Don't complete the download until we have an answer.
     state->set_callback(internal_complete_callback);
     return false;
   }
