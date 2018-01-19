@@ -299,19 +299,6 @@ bool AtomDownloadManagerDelegate::ShouldBlockFile(
               danger_type == content::DOWNLOAD_DANGER_TYPE_DANGEROUS_URL);
 }
 
-void AtomDownloadManagerDelegate::MaybeSendDangerousDownloadOpenedReport(
-    DownloadItem* download,
-    bool show_download_in_folder) {
-#if defined(FULL_SAFE_BROWSING)
-  safe_browsing::DownloadProtectionService* service =
-      GetDownloadProtectionService();
-  if (service) {
-    service->MaybeSendDangerousDownloadOpenedReport(download,
-                                                    show_download_in_folder);
-  }
-#endif
-}
-
 AtomDownloadManagerDelegate::AtomDownloadManagerDelegate(
     content::DownloadManager* manager)
     : download_manager_(manager),
@@ -365,10 +352,8 @@ void AtomDownloadManagerDelegate::OnDownloadTargetDetermined(
 
   if (ShouldBlockFile(target_info->danger_type)) {
     item->OnContentCheckCompleted(
-        // Specifying a dangerous type here would take precendence over the
-        // blocking of the file.
         content::DOWNLOAD_DANGER_TYPE_NOT_DANGEROUS,
-        content::DOWNLOAD_INTERRUPT_REASON_FILE_BLOCKED);
+        content::DOWNLOAD_INTERRUPT_REASON_NONE);
   } else {
     item->OnContentCheckCompleted(
         content::DOWNLOAD_DANGER_TYPE_DANGEROUS_FILE,
@@ -492,15 +477,6 @@ void AtomDownloadManagerDelegate::ReserveVirtualPath(
           true,
           conflict_action,
           callback);
-}
-
-bool AtomDownloadManagerDelegate::IsOpenInBrowserPreferreredForFile(
-    const base::FilePath& path) {
-#if defined(OS_WIN) || defined(OS_LINUX) || defined(OS_MACOSX)
-  if (path.MatchesExtension(FILE_PATH_LITERAL(".pdf"))) {
-    return true;
-  }
-#endif
 }
 
 bool AtomDownloadManagerDelegate::ShouldOpenDownload(
