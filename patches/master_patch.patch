@@ -2190,6 +2190,30 @@ index f1a096e649290ef2e2ce2cc30891f547a6dc196f..1338eb43287476a108454e316dbfb853
    return switches::autoplay::kUserGestureRequiredPolicy;
  #else
    return switches::autoplay::kNoUserGestureRequiredPolicy;
+diff --git a/net/base/linked_hash_map.h b/net/base/linked_hash_map.h
+index 921764f79c603fd8b8037ac52ca2ebabb0440ebd..a7f71c080f52e35310d90b6815b1c1a190ed1063 100644
+--- a/net/base/linked_hash_map.h
++++ b/net/base/linked_hash_map.h
+@@ -142,8 +142,7 @@ class linked_hash_map {
+   // map and list, a CHECK() error will occur.
+   iterator erase(iterator position) {
+     typename MapType::iterator found = map_.find(position->first);
+-    CHECK(found->second == position)
+-        << "Inconsisent iterator for map and list, or the iterator is invalid.";
++    CHECK(found->second == position);
+ 
+     map_.erase(found);
+     return list_.erase(position);
+@@ -222,8 +221,7 @@ class linked_hash_map {
+     typename ListType::iterator last = list_.end();
+     --last;
+ 
+-    CHECK(map_.insert(std::make_pair(pair.first, last)).second)
+-        << "Map and list are inconsistent";
++    CHECK(map_.insert(std::make_pair(pair.first, last)).second);
+ 
+     return std::make_pair(last, true);
+   }
 diff --git a/net/http/BUILD.gn b/net/http/BUILD.gn
 index d00da41da1d8bbc40d8a85d582c1966ed22eaaf1..6a3b54e91eafb8f187989c9c954be0008343aa63 100644
 --- a/net/http/BUILD.gn

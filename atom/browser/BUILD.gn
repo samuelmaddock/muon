@@ -29,7 +29,6 @@ source_set("browser") {
     # @todo(bridiver) fix circular dep
     # "//electron/muon/browser",
     "//base",
-    "//chrome/browser:resource_prefetch_predictor_proto",
     "//chrome/common:constants",
     "//storage/browser",
     "//storage/common",
