@@ -49,6 +49,10 @@ class CommonWebContentsDelegate
   // Returns the WebContents of devtools.
   content::WebContents* GetDevToolsWebContents() const;
 
+  void SetHtmlApiFullscreenable(bool html_fullscreenable) {
+    html_fullscreenable_ = html_fullscreenable;
+  }
+
   virtual brightray::InspectableWebContents* managed_web_contents() const {
     return web_contents_.get();
   }
@@ -159,6 +163,9 @@ class CommonWebContentsDelegate
 
   // Whether window is fullscreened by window api.
   bool native_fullscreen_;
+
+  // Whether window is fullscreenable by HTML5 api.
+  bool html_fullscreenable_;
 
   scoped_refptr<DevToolsFileSystemIndexer> devtools_file_system_indexer_;
 
