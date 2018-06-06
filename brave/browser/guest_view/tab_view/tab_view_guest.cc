@@ -59,7 +59,6 @@ namespace {
 bool HasWindow(WebContents* web_contents) {
   auto tab_helper = extensions::TabHelper::FromWebContents(web_contents);
   return (tab_helper && tab_helper->window_id() != -1);
-
 }
 
 }
@@ -371,11 +370,11 @@ void TabViewGuest::SetTransparency() {
   auto* rvh = web_contents()->GetRenderViewHost();
   if (!rvh)
     return;
-  
+
   auto* view = rvh->GetWidget()->GetView();
   if (!view)
     return;
-  
+
   if (allow_transparency_)
     view->SetBackgroundColor(SK_ColorTRANSPARENT);
   else

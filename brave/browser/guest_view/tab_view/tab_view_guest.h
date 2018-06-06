@@ -95,7 +95,7 @@ class TabViewGuest : public guest_view::GuestView<TabViewGuest> {
 
   // Stores whether the contents of the guest can be transparent.
   bool allow_transparency_;
-  
+
   // Stores the src URL of the WebView.
   GURL src_;
 
