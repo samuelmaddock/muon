@@ -194,6 +194,8 @@ void TabViewGuest::NavigateGuest(const std::string& src,
 
 void TabViewGuest::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
+  SetAllowTransparency(true);
+
   if (navigation_handle->IsInMainFrame()) {
     src_ = web_contents()->GetURL();
   }
@@ -356,6 +358,14 @@ void TabViewGuest::ApplyAttributes(const base::DictionaryValue& params) {
     }
   }
 
+  bool allow_transparency = false;
+  if (params.GetBoolean(webview::kAttributeAllowTransparency,
+      &allow_transparency)) {
+    // We need to set the background opaque flag after navigation to ensure that
+    // there is a RenderWidgetHostView available.
+    SetAllowTransparency(allow_transparency);
+  }
+
   // handle navigation for src attribute changes
   if (!is_pending_new_window) {
     std::string src;
@@ -377,14 +387,6 @@ void TabViewGuest::ApplyAttributes(const base::DictionaryValue& params) {
       }
       NavigateGuest(src_.spec(), true);
     }
-  }
-
-  bool allow_transparency = false;
-  if (params.GetBoolean(webview::kAttributeAllowTransparency,
-      &allow_transparency)) {
-    // We need to set the background opaque flag after navigation to ensure that
-    // there is a RenderWidgetHostView available.
-    SetAllowTransparency(allow_transparency);
   }
 }
 
