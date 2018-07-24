@@ -195,12 +195,6 @@ void BraveContentRendererClient::RenderFrameCreated(
 void BraveContentRendererClient::RenderViewCreated(
     content::RenderView* render_view) {
   new ChromeRenderViewObserver(render_view, web_cache_impl_.get());
-
-  blink::WebFrameWidget* web_frame_widget = render_view->GetWebFrameWidget();
-
-  if (web_frame_widget) {
-    web_frame_widget->SetBaseBackgroundColor(SK_ColorTRANSPARENT);
-  }
 }
 
 bool BraveContentRendererClient::OverrideCreatePlugin(
